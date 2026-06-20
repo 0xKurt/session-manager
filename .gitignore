@@ -1,0 +1,20 @@
+/target
+**/node_modules
+ui/dist
+src-tauri/target
+src-tauri/gen
+.DS_Store
+*.log
+.env
+.env.local
+.vscode/
+.idea/
+
+# Ed25519 updater key material — the matching pubkey IS embedded in
+# tauri.conf.json (safe to publish); the private key MUST stay on the
+# build machine. Backed up to ~/.config/session-manager/updater.key.
+updater.key
+updater.key.pub
+*.tar.gz
+*.sig
+latest.json

@@ -1,0 +1,30 @@
+[package]
+name = "session-manager-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "session_manager_core"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+dirs.workspace = true
+notify.workspace = true
+parking_lot.workspace = true
+chrono.workspace = true
+shellexpand.workspace = true
+async-trait.workspace = true
+regex = "1"
+fs2 = "0.4"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
