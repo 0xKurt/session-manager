@@ -22,6 +22,15 @@ verified against the pubkey embedded in the bundle.
 
 ![Session Manager — Sessions view](assets/screenshot.png)
 
+## Features
+
+- adopts already-running claude sessions without killing them
+- one click start / stop / restart per session
+- survives reboots
+- per-session status (working, needs permission, rate limited, crashed)
+- QR + URL for claude.ai remote control
+- optional keep-machine-awake while sessions are running
+
 **Defining choice:** supervisor, not a relay. Remote access uses each
 agent's *native* remote feature. We never proxy traffic, never hold an
 account, never phone home.
