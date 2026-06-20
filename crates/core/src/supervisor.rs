@@ -74,10 +74,6 @@ pub(crate) struct SupervisorState {
     pub(crate) file: SessionsFile,
     pub(crate) runtime: RuntimeState,
     pub(crate) workers: HashMap<String, SessionWorker>,
-    /// Sessions the user stopped during *this* supervisor lifetime. NOT
-    /// persisted — reboot resets this so auto_restart sessions come back
-    /// (§6 "Fleet at login").
-    intentionally_stopped: HashSet<String>,
     /// Last resolved agent binary path per backend. We compare against this
     /// on the upgrade-watcher tick; a mismatch (e.g. Homebrew's
     /// Caskroom path embeds the version) emits `BinaryUpgraded`.
@@ -115,10 +111,11 @@ impl Supervisor {
         let mut runtime = RuntimeState::load_or_default(&state_path);
 
         // After a clean shutdown / reboot, treat all running/idle/etc as
-        // "offline" so the reconciler restarts any auto_restart session. The
-        // user's persisted Stopped marker stays Stopped, but `intentionally_stopped`
-        // is empty after open so the next reconcile won't suppress those
-        // sessions either — §6 "Fleet at login".
+        // "offline" so the reconciler restarts any auto_restart session
+        // that wasn't explicitly stopped. `intentionally_stopped` is now
+        // persisted in runtime.json (was in-memory) so user-stopped
+        // sessions stay stopped across app restarts AND machine reboots.
+        // If you want a session to come back at login, leave it running.
         for r in runtime.sessions.values_mut() {
             if matches!(
                 r.status,
@@ -151,7 +148,6 @@ impl Supervisor {
                     file,
                     runtime,
                     workers: HashMap::new(),
-                    intentionally_stopped: HashSet::new(),
                     binary_paths: HashMap::new(),
                 }),
                 keep_awake_token: Mutex::new(None),
@@ -231,6 +227,13 @@ impl Supervisor {
                 }
             }
         }
+        // Drop externals whose cwd matches a managed session config. They
+        // are the SAME process viewed from two angles (between spawn and
+        // the supervisor's runtime.pid update — and during the lag while
+        // a recycled-PID claude winds down). Showing them briefly in the
+        // External list flickered the UI and confused the user every
+        // app restart.
+        all.retain(|d| d.matches_session_id.is_none());
 
         // Live activity probe per external row — JSONL probe works the
         // same regardless of who started the process. Run concurrently
@@ -370,7 +373,8 @@ impl Supervisor {
         if g.file.find(&session.id).is_some() {
             return Err(Error::SessionExists(session.id));
         }
-        g.intentionally_stopped.remove(&session.id);
+        g.runtime.intentionally_stopped.remove(&session.id);
+        let _ = g.runtime.save(&self.inner.state_path);
         g.file.upsert(session);
         g.file.save(&self.inner.config_path)?;
         // No emit, no notify_reconcile — the caller has already wired up
@@ -508,7 +512,8 @@ impl Supervisor {
     pub async fn stop_session(&self, id: &str) -> Result<()> {
         let worker = {
             let mut g = self.inner.shared.lock().await;
-            g.intentionally_stopped.insert(id.to_string());
+            g.runtime.intentionally_stopped.insert(id.to_string());
+            let _ = g.runtime.save(&self.inner.state_path);
             g.workers.remove(id)
         };
         let Some(worker) = worker else {
@@ -577,7 +582,8 @@ impl Supervisor {
     pub async fn start_session(&self, id: &str) -> Result<()> {
         let session = {
             let mut g = self.inner.shared.lock().await;
-            g.intentionally_stopped.remove(id);
+            g.runtime.intentionally_stopped.remove(id);
+            let _ = g.runtime.save(&self.inner.state_path);
             g.file
                 .find(id)
                 .cloned()
@@ -591,7 +597,8 @@ impl Supervisor {
         // serialized and we won't double-spawn.
         self.stop_session(id).await.ok();
         let mut g = self.inner.shared.lock().await;
-        g.intentionally_stopped.remove(id);
+        g.runtime.intentionally_stopped.remove(id);
+        let _ = g.runtime.save(&self.inner.state_path);
         let session = g
             .file
             .find(id)
@@ -615,7 +622,8 @@ impl Supervisor {
             r.restart_count = 0;
             r.reason = None;
         }
-        g.intentionally_stopped.remove(id);
+        g.runtime.intentionally_stopped.remove(id);
+        let _ = g.runtime.save(&self.inner.state_path);
         let session = g
             .file
             .find(id)
@@ -630,7 +638,8 @@ impl Supervisor {
         if g.file.find(&session.id).is_some() {
             return Err(Error::SessionExists(session.id));
         }
-        g.intentionally_stopped.remove(&session.id);
+        g.runtime.intentionally_stopped.remove(&session.id);
+        let _ = g.runtime.save(&self.inner.state_path);
         g.file.upsert(session);
         g.file.save(&self.inner.config_path)?;
         drop(g);
@@ -666,7 +675,7 @@ impl Supervisor {
             .remove(id)
             .ok_or_else(|| Error::SessionNotFound(id.into()))?;
         g.runtime.sessions.remove(id);
-        g.intentionally_stopped.remove(id);
+        g.runtime.intentionally_stopped.remove(id);
         g.file.save(&self.inner.config_path)?;
         let _ = g.runtime.save(&self.inner.state_path);
         drop(g);
@@ -759,7 +768,7 @@ async fn reconcile(inner: &Arc<SupervisorInner>) -> Result<()> {
             let g = inner.shared.lock().await;
             (
                 g.workers.contains_key(&s.id),
-                g.intentionally_stopped.contains(&s.id),
+                g.runtime.intentionally_stopped.contains(&s.id),
             )
         };
         if !running && !intentionally_stopped {
@@ -1306,7 +1315,11 @@ async fn worker_loop(
 
 async fn mark_intentionally_stopped(inner: &Arc<SupervisorInner>, id: &str) {
     let mut g = inner.shared.lock().await;
-    g.intentionally_stopped.insert(id.to_string());
+    g.runtime.intentionally_stopped.insert(id.to_string());
+    // Persist so the next app launch respects the user's stop. Used to
+    // be in-memory only, which made every app restart respawn all
+    // auto_restart sessions even right after the user had stopped them.
+    let _ = g.runtime.save(&inner.state_path);
 }
 
 /// Concurrent collector for a Vec of futures without pulling in the
@@ -1545,7 +1558,7 @@ async fn claimed_worker_loop(
             cleanup_worker_entry(&inner, &session.id).await;
             let intentionally_stopped = {
                 let g = inner.shared.lock().await;
-                g.intentionally_stopped.contains(&session.id)
+                g.runtime.intentionally_stopped.contains(&session.id)
             };
             if session.auto_restart && !intentionally_stopped {
                 mark_status(

@@ -1,7 +1,7 @@
 //! Runtime state cache. Mirrors what the supervisor knows about each session
 //! at this instant — never hand-edited (§7.7).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
@@ -50,6 +50,14 @@ pub struct RuntimeState {
     pub sessions: HashMap<String, SessionRuntime>,
     #[serde(default)]
     pub keep_awake_active: bool,
+    /// Sessions the user explicitly stopped. **Persisted across app
+    /// restarts** (used to be in-memory only, which meant relaunching
+    /// the app respawned every auto_restart session even if the user
+    /// had just stopped them on purpose). Cleared when the user starts
+    /// the session again. Machine reboots no longer reset this either;
+    /// if you want a session to come back at login, leave it running.
+    #[serde(default)]
+    pub intentionally_stopped: HashSet<String>,
 }
 
 impl RuntimeState {
