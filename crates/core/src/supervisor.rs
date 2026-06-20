@@ -729,9 +729,19 @@ async fn notify_gated(inner: &Arc<SupervisorInner>, title: &str, body: &str, urg
     if !enabled {
         return;
     }
-    if let Err(e) = inner.os.notify(title, body, urgent) {
-        warn!("notify: {e}");
-    }
+    // Emit an event so Tauri fires a native notification AS
+    // "Session Manager" via plugin-notification (proper identity, proper
+    // permission flow). We deliberately do NOT also call os.notify here
+    // — that path delivers via `osascript`, which appears as "Script
+    // Editor" and causes a duplicate banner when both fire.
+    emit(
+        inner,
+        CoreEvent::NotifyRequested {
+            title: title.to_string(),
+            body: body.to_string(),
+            urgent,
+        },
+    );
 }
 
 async fn reconcile(inner: &Arc<SupervisorInner>) -> Result<()> {

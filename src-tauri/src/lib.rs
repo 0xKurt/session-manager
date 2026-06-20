@@ -124,11 +124,26 @@ pub fn run() {
             let app_critical = tray_handle.clone();
             let mut critical_rx: broadcast::Receiver<_> = sup.subscribe();
             rh.spawn(async move {
+                use session_manager_core::events::CoreEvent;
+                use tauri_plugin_notification::NotificationExt;
                 loop {
                     match critical_rx.recv().await {
                         Ok(ev) => {
                             let _ = app_critical.emit("core-event", &ev);
                             let _ = tray::reflect_event(&app_critical, &ev);
+                            // Route native-notification requests through
+                            // `tauri-plugin-notification` so the banner
+                            // appears as "Session Manager" with the right
+                            // OS permission grant flow (not "Script Editor"
+                            // as the osascript fallback would render).
+                            if let CoreEvent::NotifyRequested { title, body, .. } = &ev {
+                                let _ = app_critical
+                                    .notification()
+                                    .builder()
+                                    .title(title.clone())
+                                    .body(body.clone())
+                                    .show();
+                            }
                         }
                         Err(broadcast::error::RecvError::Lagged(_)) => continue,
                         Err(broadcast::error::RecvError::Closed) => break,

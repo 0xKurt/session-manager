@@ -86,16 +86,22 @@ impl OsLayer for MacOsLayer {
     }
 
     fn acquire_keep_awake(&self, reason: &str) -> Result<Box<dyn KeepAwakeToken>> {
-        // `caffeinate -i -s -m` — block idle, system, and disk sleep so
-        // lid-close + idle timeouts can't suspend the machine while the
-        // agent is working (§8.6). We deliberately omit `-d` (display
-        // sleep) — the display can still dim/turn off after the user's
-        // configured timeout; only the CPU/disk stay awake. We hold the
-        // Child handle for the lifetime of the token so release() can
-        // kill+wait — that way we never leak a zombie and we never
-        // SIGTERM a recycled PID by mistake.
+        // `caffeinate -d -i -s -m -u` — block display, idle, system, disk
+        // sleep AND declare the user active. We use the most aggressive
+        // assertion set caffeinate exposes:
+        //   -d  PreventUserIdleDisplaySleep
+        //   -i  PreventUserIdleSystemSleep
+        //   -s  PreventSystemSleep  (only effective on AC power!)
+        //   -m  PreventDiskIdle
+        //   -u  Declare user active (extends timeout windows)
+        //
+        // Important macOS limitation: NO caffeinate flag survives
+        // **lid-close on battery** — that's a hardware-enforced clamshell
+        // sleep policy that requires sudo + pmset changes (or external
+        // display + power + keyboard for "clamshell mode") to override.
+        // The UI Settings page documents this so users aren't surprised.
         let child = Command::new("caffeinate")
-            .args(["-i", "-s", "-m"])
+            .args(["-d", "-i", "-s", "-m", "-u"])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .stdin(std::process::Stdio::null())

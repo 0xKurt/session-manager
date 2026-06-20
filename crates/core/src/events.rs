@@ -114,4 +114,14 @@ pub enum CoreEvent {
         old_path: String,
         new_path: String,
     },
+    /// Native-notification request from the supervisor. The Tauri runtime
+    /// routes this through `tauri-plugin-notification` so the toast
+    /// appears as "Session Manager" (the right app identity for the OS
+    /// permission flow). Falls back to the OS layer's own notify() if
+    /// the Tauri side isn't listening (CLI/daemon mode).
+    NotifyRequested {
+        title: String,
+        body: String,
+        urgent: bool,
+    },
 }

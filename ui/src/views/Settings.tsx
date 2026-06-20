@@ -62,7 +62,7 @@ export function Settings() {
           />
           <ToggleRow
             label="Keep machine awake while any session is running"
-            description="Holds an OS sleep-inhibitor (caffeinate -i -s -m) for as long as at least one session is in a running state. Display can still dim/sleep; only CPU + disk stay awake."
+            description="Holds `caffeinate -d -i -s -m -u` for as long as at least one session is in a running state — display, idle, system and disk sleep all blocked while sessions are active. macOS limitation: on battery, closing the lid still sleeps the machine regardless (clamshell sleep is hardware-enforced; no userspace tool can override it without sudo + pmset changes). Use AC power if you need to keep sessions running with the lid closed."
             checked={preferences.keep_awake_master}
             onChange={(v) => void setPrefs({ keep_awake_master: v })}
           />
