@@ -86,6 +86,7 @@ pub fn run() {
             ipc::stop_external,
             ipc::adopt_external,
             ipc::claim_external,
+            ipc::focus_main_window,
         ])
         .setup(move |app| {
             // Tray.
@@ -175,12 +176,23 @@ pub fn run() {
             }
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
                 // Don't quit on window close — stay in the tray (§7.2 model a).
                 api.prevent_close();
                 let _ = window.hide();
             }
+            // Popover dismiss-on-click-outside: when the popover loses
+            // focus, hide it. The user can re-open it with another tray
+            // click. We deliberately only do this for the popover label;
+            // the main window stays visible across focus changes (a
+            // normal app expectation).
+            tauri::WindowEvent::Focused(false) => {
+                if window.label() == "popover" {
+                    let _ = window.hide();
+                }
+            }
+            _ => {}
         })
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

@@ -1050,6 +1050,171 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); }
   color: var(--info);
   border: 1px solid rgba(106, 177, 255, 0.35);
 }
+
+/* =========================================================
+   Tray popover — frameless secondary window (#/popover).
+   Window itself is transparent (tauri.conf.json). We draw a
+   rounded card here so the popover has a proper macOS look
+   instead of bleeding into the desktop.
+   ========================================================= */
+.popover-root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(18, 21, 30, 0.96);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--t-sm);
+}
+.popover-loading {
+  display: grid;
+  place-items: center;
+  height: 100vh;
+  color: var(--text-muted);
+  background: rgba(18, 21, 30, 0.96);
+  border-radius: 14px;
+}
+
+.popover-header {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.popover-title {
+  font-weight: 600;
+  font-size: var(--t-base);
+  letter-spacing: 0.005em;
+}
+.popover-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: var(--t-xs);
+  color: var(--text-muted);
+}
+.popover-counts .pc.good   { color: var(--good); }
+.popover-counts .pc.warn   { color: var(--warn); }
+.popover-counts .pc.danger { color: var(--danger); }
+.popover-counts .pc.info   { color: var(--info); }
+.popover-counts .pc.muted  { color: var(--text-muted); }
+
+.popover-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+.popover-empty {
+  padding: 20px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--t-xs);
+}
+
+.popover-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+.popover-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+/* Attention rows — surface needs-permission / crashed sessions
+   prominently so they don't blend in with regular idle rows. The
+   colored dot alone reads as decoration; the row-tint + inline tag
+   together feel actionable. */
+.popover-row.attn-warn {
+  background: rgba(231, 183, 95, 0.08);
+  border-color: rgba(231, 183, 95, 0.28);
+}
+.popover-row.attn-danger {
+  background: rgba(236, 104, 104, 0.08);
+  border-color: rgba(236, 104, 104, 0.30);
+}
+.popover-row-tag {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.popover-row-tag.warn {
+  color: var(--warn);
+  background: rgba(231, 183, 95, 0.14);
+  border: 1px solid rgba(231, 183, 95, 0.35);
+}
+.popover-row-tag.danger {
+  color: var(--danger);
+  background: rgba(236, 104, 104, 0.14);
+  border: 1px solid rgba(236, 104, 104, 0.40);
+}
+.popover-row-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-size: var(--t-sm);
+  border-radius: 6px;
+  min-width: 0;
+}
+.popover-row-main:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.popover-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.popover-row-action {
+  font-size: var(--t-xs);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--text-soft);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.popover-row-action:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+.popover-row-action.primary {
+  background: var(--accent-soft);
+  border-color: rgba(123, 108, 246, 0.45);
+  color: var(--accent);
+}
+
+.popover-footer {
+  border-top: 1px solid var(--border);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.popover-footer-row {
+  display: flex;
+  gap: 6px;
+}
+.popover-footer-row .btn {
+  flex: 1;
+  font-size: var(--t-xs);
+  padding: 4px 8px;
+}
 .toggle-row-desc {
   color: var(--text-muted);
   font-size: var(--t-sm);

@@ -127,6 +127,21 @@ pub fn open_in_os(path: String) -> std::result::Result<(), String> {
     session_manager_core::os::open_in_os(std::path::Path::new(&path)).map_err(|e| e.to_string())
 }
 
+/// Bring the main window to the foreground. Used by the tray popover
+/// when the user clicks a row that should reveal the main view — the
+/// popover doesn't own that surface, so we hand off here.
+#[tauri::command]
+pub fn focus_main_window(app: tauri::AppHandle) -> std::result::Result<(), String> {
+    use tauri::Manager;
+    let Some(w) = app.get_webview_window("main") else {
+        return Err("main window not found".into());
+    };
+    w.show().map_err(|e| e.to_string())?;
+    w.unminimize().map_err(|e| e.to_string())?;
+    w.set_focus().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Backends the UI is allowed to surface in the agent picker.
 /// Codex stays in the core registry so existing sessions referencing it
 /// continue to work, but we don't recommend creating new ones until the

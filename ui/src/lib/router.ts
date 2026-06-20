@@ -5,12 +5,17 @@ export type Route =
   | { name: "new"; query?: URLSearchParams }
   | { name: "edit"; id: string }
   | { name: "session"; id: string }
-  | { name: "settings" };
+  | { name: "settings" }
+  | { name: "popover" };
 
 function parse(hash: string): Route {
   const path = hash.replace(/^#/, "") || "/";
   const [base, qs] = path.split("?", 2);
   const query = qs ? new URLSearchParams(qs) : undefined;
+  // Frameless tray popover. Loaded by the "popover" window (declared in
+  // tauri.conf.json) with `url: "index.html#/popover"`. Same bundle, same
+  // store — just a different React view.
+  if (base === "/popover") return { name: "popover" };
   if (base === "/new") return { name: "new", query };
   if (base === "/settings") return { name: "settings" };
   if (base.startsWith("/session/")) {

@@ -9,6 +9,7 @@ import { useStore } from "./lib/store";
 import { CreateSession } from "./views/CreateSession";
 import { Dashboard } from "./views/Dashboard";
 import { Onboarding } from "./views/Onboarding";
+import { Popover } from "./views/Popover";
 import { SessionDetail } from "./views/SessionDetail";
 import { Settings } from "./views/Settings";
 
@@ -68,6 +69,18 @@ export function App() {
       <div style={{ display: "grid", placeItems: "center", height: "100vh", color: "var(--text-muted)" }}>
         Loading…
       </div>
+    );
+  }
+
+  // Frameless tray popover — runs in the secondary Tauri window with its
+  // own slim layout, no sidebar / top-bar chrome. Bypasses the rest of
+  // the app shell entirely.
+  if (route.name === "popover") {
+    return (
+      <>
+        <Popover />
+        <Toasts />
+      </>
     );
   }
 

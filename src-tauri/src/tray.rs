@@ -1,17 +1,21 @@
-//! Tray menu — the click-target *is* the overview.
+//! Tray — the click-target *is* the overview.
 //!
-//! Left-click on the tray icon pops the menu (it isn't a separate window).
-//! The menu carries: an aggregate-status header, attention rows
-//! (needs-permission / crashed) at the top, every defined session at top
-//! level with its status glyph and an inline Start/Stop toggle, then the
-//! global actions.
+//! **Left-click**: toggles a frameless, transparent webview popover
+//! anchored under the tray icon. The popover is a separate Tauri window
+//! (`label = "popover"`, declared in tauri.conf.json) that loads the
+//! React app at `#/popover` and reuses the existing store/session data.
+//! Closes itself on focus-loss (handled in lib.rs).
+//!
+//! **Right-click**: pops the native NSMenu as a fallback — keeps a11y +
+//! a way out when the popover misbehaves on a given macOS revision.
 
 use std::sync::Arc;
 
 use session_manager_core::events::{CoreEvent, SessionStatus};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
-use tauri::{App, AppHandle, Manager, Wry};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
+use tauri::{App, AppHandle, LogicalPosition, Manager, Wry};
 use tokio::sync::Notify;
 
 use crate::AppState;
@@ -42,10 +46,13 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
     let tray = app
         .tray_by_id("tray")
         .expect("tray icon configured in tauri.conf.json");
-    let menu = build_menu(app.handle(), &[])?;
-    tray.set_menu(Some(menu))?;
-    // The click target IS the overview — the menu pops on left click.
-    tray.set_show_menu_on_left_click(true)?;
+    // No native NSMenu attached — the popover is the only interaction
+    // surface. Right-click is a no-op. The build_menu helpers stay in
+    // this file (commented use) in case we ever want to bring back a
+    // fallback menu, but `set_menu(None)` keeps the OS from drawing
+    // anything on right-click.
+    tray.set_menu(None::<Menu<Wry>>)?;
+    tray.set_show_menu_on_left_click(false)?;
     tray.set_tooltip(Some("Session Manager"))?;
 
     // Coalesce events into a single debounced rebuild.
@@ -60,50 +67,57 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
         }
     });
 
-    tray.on_menu_event(|app, event| {
-        let id = event.id.as_ref();
-        match id {
-            // DD — the header is a disabled item; we route here so it
-            // never accidentally triggers an action even if the OS
-            // dispatches the event.
-            MENU_HEADER => {} // disabled item — nothing to do
-            MENU_NEW => show_window(app, Some("/new")),
-            MENU_STOP_ALL => {
-                let sup = app.state::<AppState>().supervisor.clone();
-                tauri::async_runtime::spawn(async move {
-                    let _ = sup.stop_all().await;
-                });
-            }
-            MENU_OPEN => show_window(app, None),
-            MENU_QUIT => app.exit(0),
-            other if other.starts_with(SESSION_OPEN_PREFIX) => {
-                let session_id = other.trim_start_matches(SESSION_OPEN_PREFIX);
-                show_window(app, Some(&format!("/session/{session_id}")));
-            }
-            other if other.starts_with(SESSION_TOGGLE_PREFIX) => {
-                let session_id = other.trim_start_matches(SESSION_TOGGLE_PREFIX).to_string();
-                let sup = app.state::<AppState>().supervisor.clone();
-                tauri::async_runtime::spawn(async move {
-                    let (_, runtime) = sup.snapshot().await;
-                    let running = runtime
-                        .sessions
-                        .get(&session_id)
-                        .map(|r| r.status.is_running())
-                        .unwrap_or(false);
-                    if running {
-                        let _ = sup.stop_session(&session_id).await;
-                    } else {
-                        let _ = sup.start_session(&session_id).await;
-                    }
-                });
-            }
-            _ => {}
+    // No `on_menu_event` — menu is gone. All click routing happens
+    // inside the popover webview now.
+    tray.on_tray_icon_event(|tray, event| {
+        if let TrayIconEvent::Click {
+            button: MouseButton::Left,
+            button_state: MouseButtonState::Up,
+            rect,
+            ..
+        } = event
+        {
+            // tray-icon's Rect is in the high-DPI-agnostic Position/Size
+            // enum. Convert into physical pixels for set_position math.
+            let pos = rect.position.to_physical::<f64>(1.0);
+            let size = rect.size.to_physical::<f64>(1.0);
+            toggle_popover(tray.app_handle(), pos, size);
         }
     });
-    // Optional: explicit left-click handler we leave OFF because
-    // show_menu_on_left_click already pops the menu for us. Keeping the
-    // tray-icon-event hook would compete with the native menu.
+
     Ok(())
+}
+
+/// Show the popover anchored to the tray icon, or hide it if it's
+/// already visible. Position is computed from the tray icon rect so
+/// the popover sits centred under the icon with a small gap.
+fn toggle_popover(
+    app: &AppHandle,
+    icon_pos: tauri::PhysicalPosition<f64>,
+    icon_size: tauri::PhysicalSize<f64>,
+) {
+    let Some(popover) = app.get_webview_window("popover") else {
+        return;
+    };
+    if popover.is_visible().unwrap_or(false) {
+        let _ = popover.hide();
+        return;
+    }
+    // Use logical positioning — Tauri handles the scale-factor conversion.
+    let scale = popover.scale_factor().unwrap_or(1.0);
+    let win_size = popover.outer_size().ok();
+    let win_w_logical = win_size.map(|s| s.width as f64 / scale).unwrap_or(340.0);
+    let icon_x = icon_pos.x / scale;
+    let icon_y = icon_pos.y / scale;
+    let icon_w = icon_size.width / scale;
+    let icon_h = icon_size.height / scale;
+    // Centre the popover horizontally under the icon. Drop down 6px so
+    // it doesn't kiss the menu bar.
+    let x = icon_x + (icon_w / 2.0) - (win_w_logical / 2.0);
+    let y = icon_y + icon_h + 6.0;
+    let _ = popover.set_position(LogicalPosition::new(x, y));
+    let _ = popover.show();
+    let _ = popover.set_focus();
 }
 
 #[derive(Debug, Clone)]
@@ -279,8 +293,8 @@ async fn rebuild_now(app: &AppHandle) {
             let _ = tray.set_icon(Some(img));
             let _ = tray.set_icon_as_template(as_template);
         }
-        if let Ok(menu) = build_menu(app, &rows) {
-            let _ = tray.set_menu(Some(menu));
-        }
+        // No menu rebuild — the popover reads its rows live from the
+        // Zustand store on every render.
+        let _ = rows; // silence unused-warning; we still compute counts for the icon/tooltip
     }
 }
