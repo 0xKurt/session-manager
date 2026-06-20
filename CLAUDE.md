@@ -3,6 +3,34 @@
 A Tauri 2 + Rust + React app that supervises multiple AI coding-agent
 sessions. The product spec is at `docs/spec.md`; read it before working.
 
+## Release / update signing key
+
+The Ed25519 private key used to sign update bundles lives at:
+
+```
+~/.config/session-manager/updater.key      (mode 0600)
+~/.config/session-manager/updater.key.pub  (matching pubkey)
+```
+
+The **pubkey** is also embedded in `src-tauri/tauri.conf.json` under
+`plugins.updater.pubkey` (safe to publish, ships in every binary).
+
+**Lose the private key and every installed copy stops accepting your
+updates** — the embedded pubkey will reject anything not signed by it.
+Back it up to a password manager / encrypted drive. NEVER commit it;
+`.gitignore` already excludes `updater.key{,.pub}`.
+
+To cut a release: bump `version` in `src-tauri/tauri.conf.json`, then
+`./scripts/release.sh --notes "What changed"` — that builds, signs with
+the key above, and creates the GitHub release on `0xKurt/session-manager`.
+
+## CI
+
+No CI. Builds are local via `scripts/release.sh`. GitHub Actions
+workflows were intentionally removed — keep them gone unless you want
+the cross-platform Tauri build matrix back (expensive on Actions
+minutes; cheaper to just `tauri build` on the dev machine).
+
 ## Layout
 - `crates/core` — supervisor, backend trait, OS layer, paths, events
 - `crates/cli` — `session-manager` CLI
