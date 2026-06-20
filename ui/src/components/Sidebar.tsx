@@ -132,18 +132,25 @@ export function Sidebar() {
 }
 
 function GearIcon() {
-  // Slightly larger (15 vs 13) and a hair thicker stroke so the gear
-  // teeth read clearly at button height — at 13px the silhouette was
-  // collapsing into a soft blob next to the bold "Settings" label.
+  // Lucide "settings" gear — six rounded teeth, viewBox 0 0 24 24,
+  // generally hand-drawn at large size then SVG-shrunk so the curves
+  // stay smooth at 15px. The previous 16x16 path was a pixel-fitted
+  // diamond-y mess that read as a blob at button height.
   return (
-    <svg viewBox="0 0 16 16" width={15} height={15} aria-hidden style={{ marginRight: 4 }}>
-      <path
-        d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Zm6.4 2.5-1.4-.4-.3-.7.7-1.3-1.4-1.4-1.3.7-.7-.3L9.6 2.6H6.4l-.4 1.4-.7.3-1.3-.7L2.6 5l.7 1.3-.3.7L1.6 7.4v3.2l1.4.4.3.7-.7 1.3 1.4 1.4 1.3-.7.7.3.4 1.4h3.2l.4-1.4.7-.3 1.3.7 1.4-1.4-.7-1.3.3-.7 1.4-.4Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.25"
-        strokeLinejoin="round"
-      />
+    <svg
+      viewBox="0 0 24 24"
+      width={16}
+      height={16}
+      aria-hidden
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ marginRight: 6 }}
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   );
 }
