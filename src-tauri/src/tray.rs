@@ -55,6 +55,23 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
     tray.set_show_menu_on_left_click(false)?;
     tray.set_tooltip(Some("Session Manager"))?;
 
+    // Convert the popover window (declared in tauri.conf.json) into a
+    // non-activating NSPanel so it can show + accept input WITHOUT
+    // activating the app. Stock NSWindow + `[makeKeyAndOrderFront:]`
+    // doesn't activate the application (per Apple docs), so when the
+    // user clicks the tray icon while the app is in the background, the
+    // window would appear in a half-state — visible but not key, clicks
+    // not delivered, focus events firing weirdly and triggering the
+    // hide-on-blur handler in lib.rs. NSPanel with the NonactivatingPanel
+    // style mask is what every polished menu-bar app uses (Raycast,
+    // 1Password mini, Bartender).
+    #[cfg(target_os = "macos")]
+    if let Some(w) = app.handle().get_webview_window("popover") {
+        if let Err(e) = crate::panel::make_popover_panel(&w) {
+            tracing::warn!("popover panel conversion failed: {e}");
+        }
+    }
+
     // Coalesce events into a single debounced rebuild.
     let notify = Arc::new(Notify::new());
     app.manage(TrayRebuilder(Arc::clone(&notify)));

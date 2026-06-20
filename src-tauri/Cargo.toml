@@ -41,3 +41,15 @@ chrono.workspace = true
 parking_lot.workspace = true
 toml.workspace = true
 shellexpand.workspace = true
+
+# macOS-only: convert the tray popover window from a stock NSWindow into
+# a non-activating NSPanel so clicking the tray icon shows the popover
+# WITHOUT activating the app (no dock-icon bounce, no main-window steal).
+# This is what every polished menu-bar app does (Raycast, 1Password mini,
+# Bartender). objc2 + objc2-app-kit are already pulled in transitively by
+# tauri-runtime-wry → wry → objc2-web-kit, so listing them here costs
+# nothing in compile time. See src-tauri/src/tray.rs::make_popover_panel.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSPanel", "NSResponder", "NSApplication"] }
+objc2-foundation = "0.3"

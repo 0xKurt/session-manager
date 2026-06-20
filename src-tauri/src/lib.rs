@@ -2,6 +2,8 @@
 //! wires up the tray.
 
 mod ipc;
+#[cfg(target_os = "macos")]
+mod panel;
 mod tray;
 
 use std::sync::Arc;
