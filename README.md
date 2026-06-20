@@ -8,6 +8,8 @@ Spec: [docs/spec.md](docs/spec.md). UI reference: [docs/keel-mockup.html](docs/k
 agent's *native* remote feature. We never proxy traffic, never hold an
 account, never phone home.
 
+![Session Manager — Fleet view](docs/screenshot.png)
+
 ## Install (macOS, Apple Silicon)
 
 ```bash
