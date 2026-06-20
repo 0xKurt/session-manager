@@ -1,14 +1,12 @@
 # Session Manager
 
-A small, local, cross-platform desktop app that supervises multiple AI
-coding-agent sessions (Claude Code, Codex) running on your own machine.
-Spec: [docs/spec.md](docs/spec.md). UI reference: [docs/keel-mockup.html](docs/keel-mockup.html).
+[![release](https://img.shields.io/github/v/release/0xKurt/session-manager?label=release&color=7b6cf6)](https://github.com/0xKurt/session-manager/releases/latest)
+[![downloads](https://img.shields.io/github/downloads/0xKurt/session-manager/total?label=downloads&color=7b6cf6)](https://github.com/0xKurt/session-manager/releases)
+[![license](https://img.shields.io/github/license/0xKurt/session-manager?color=7b6cf6)](LICENSE)
 
-**Defining choice:** supervisor, not a relay. Remote access uses each
-agent's *native* remote feature. We never proxy traffic, never hold an
-account, never phone home.
-
-![Session Manager — Fleet view](docs/screenshot.png)
+A small, local desktop app that supervises multiple AI coding-agent sessions
+(Claude Code) on your own machine. Built for myself to stop manually
+restarting a dozen sessions after every reboot.
 
 ## Install (macOS, Apple Silicon)
 
@@ -16,11 +14,17 @@ account, never phone home.
 curl -fsSL https://raw.githubusercontent.com/0xKurt/session-manager/main/scripts/install.sh | bash
 ```
 
-That fetches the latest release tarball, strips Gatekeeper's quarantine
-flag, drops the bundle into `/Applications/Session Manager.app`, and
-launches it. Subsequent updates: in-app → Settings → About → **Check for
-updates** (Ed25519-signed; verified against the pubkey embedded in the
-bundle).
+Fetches the latest release tarball, strips Gatekeeper's quarantine flag,
+drops the bundle into `/Applications/Session Manager.app`, and launches
+it. The app auto-checks for updates at startup; you can also trigger a
+check manually from **Settings → About**. Updates are Ed25519-signed and
+verified against the pubkey embedded in the bundle.
+
+![Session Manager — Sessions view](assets/screenshot.png)
+
+**Defining choice:** supervisor, not a relay. Remote access uses each
+agent's *native* remote feature. We never proxy traffic, never hold an
+account, never phone home.
 
 ## Status
 
@@ -68,8 +72,7 @@ crates/
   cli/      # session-manager CLI (mirrors core actions)
 src-tauri/  # Tauri shell: IPC + tray + window
 ui/         # React + Vite + TS frontend
-docs/       # spec.md + design reference
-.github/    # CI + release workflows
+scripts/    # release + install
 ```
 
 ## CLI

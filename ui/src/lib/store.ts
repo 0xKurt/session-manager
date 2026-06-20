@@ -56,6 +56,12 @@ interface StoreState {
   setPrefs: (patch: Partial<AppPreferences>) => Promise<void>;
   setLaunchAtLogin: (enabled: boolean) => Promise<void>;
   dismissToast: (id: string) => void;
+  /**
+   * Surface an in-app toast from any caller. Mostly used by built-in
+   * flows (power-user nudge, agent-binary-upgrade banner, …); App.tsx
+   * also drives it from the auto-update check at startup.
+   */
+  pushToast: (toast: Omit<StoreState["toasts"][number], "id">) => void;
 }
 
 const LOG_TAIL_KEEP = 200;
@@ -223,6 +229,9 @@ export const useStore = create<StoreState>((set, get) => ({
     await get().setPrefs({ launch_at_login: enabled });
   },
 
+  pushToast(toast) {
+    pushToast(set, toast);
+  },
   dismissToast(id) {
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
   },

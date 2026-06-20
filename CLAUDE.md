@@ -1,7 +1,7 @@
 # Session Manager — Claude notes
 
 A Tauri 2 + Rust + React app that supervises multiple AI coding-agent
-sessions. The product spec is at `docs/spec.md`; read it before working.
+sessions.
 
 ## Release / update signing key
 
@@ -36,8 +36,6 @@ minutes; cheaper to just `tauri build` on the dev machine).
 - `crates/cli` — `session-manager` CLI
 - `src-tauri` — Tauri shell: tray, IPC commands, window event handlers
 - `ui` — React+Vite+TS frontend
-- `docs/spec.md` — source of truth for product / tech decisions
-- `docs/keel-mockup.html` — UI design reference
 
 ## Build commands
 - `cargo check --workspace` — fast sanity check across all crates
@@ -69,5 +67,3 @@ minutes; cheaper to just `tauri build` on the dev machine).
 ## Adding a new backend
 Implement `Backend` in `crates/core/src/backend/<id>.rs`, then register in `make_backend()` and `registry()` in `backend/mod.rs`. Nothing else touches it.
 
-## Open design questions
-See spec §13 — supervisor model (a vs b), default permission, name, Codex remote specifics.

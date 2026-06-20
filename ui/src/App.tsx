@@ -1,9 +1,10 @@
 import { useEffect } from "react";
+import { check } from "@tauri-apps/plugin-updater";
 
 import { Sidebar } from "./components/Sidebar";
 import { Toasts } from "./components/Toasts";
 import { TopBar } from "./components/TopBar";
-import { useRoute } from "./lib/router";
+import { go, useRoute } from "./lib/router";
 import { useStore } from "./lib/store";
 import { CreateSession } from "./views/CreateSession";
 import { Dashboard } from "./views/Dashboard";
@@ -16,9 +17,39 @@ export function App() {
   const ready = useStore((s) => s.ready);
   const sessions = useStore((s) => s.sessions);
   const externalCount = useStore((s) => s.external.length);
+  const pushToast = useStore((s) => s.pushToast);
   const route = useRoute();
 
   useEffect(() => { void bootstrap(); }, [bootstrap]);
+
+  // Silent update check at startup. We deliberately don't download — the
+  // user clicks "Restart to install" inside Settings → About after
+  // navigating there from the toast. Throttled to once-per-hour via
+  // sessionStorage so opening + closing the window doesn't hammer the
+  // GitHub API. Failures are swallowed (offline, rate-limited, etc.).
+  useEffect(() => {
+    if (!ready) return;
+    const KEY = "sm.lastUpdateCheck";
+    const last = Number(window.sessionStorage.getItem(KEY) ?? "0");
+    if (Date.now() - last < 60 * 60 * 1000) return;
+    window.sessionStorage.setItem(KEY, String(Date.now()));
+    // A short delay so the first paint isn't competing with a network
+    // round-trip — feels noticeably snappier on cold start.
+    const t = window.setTimeout(() => {
+      check()
+        .then((update) => {
+          if (!update) return;
+          pushToast({
+            title: `Update available: v${update.version}`,
+            body: "Open Settings to download and install.",
+            tone: "info",
+            action: { label: "Open Settings", run: () => go("/settings") },
+          });
+        })
+        .catch(() => {});
+    }, 4000);
+    return () => window.clearTimeout(t);
+  }, [ready, pushToast]);
 
   // Per-route window title — helps with macOS app switcher + recents.
   useEffect(() => {
