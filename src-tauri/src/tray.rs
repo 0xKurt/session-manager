@@ -77,11 +77,12 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
             ..
         } = event
         {
-            // tray-icon's Rect is in the high-DPI-agnostic Position/Size
-            // enum. Convert into physical pixels for set_position math.
-            let pos = rect.position.to_physical::<f64>(1.0);
-            let size = rect.size.to_physical::<f64>(1.0);
-            toggle_popover(tray.app_handle(), pos, size);
+            tracing::info!(
+                "tray click — position={:?} size={:?}",
+                rect.position,
+                rect.size
+            );
+            toggle_popover(tray.app_handle(), rect);
         }
     });
 
@@ -91,30 +92,40 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
 /// Show the popover anchored to the tray icon, or hide it if it's
 /// already visible. Position is computed from the tray icon rect so
 /// the popover sits centred under the icon with a small gap.
-fn toggle_popover(
-    app: &AppHandle,
-    icon_pos: tauri::PhysicalPosition<f64>,
-    icon_size: tauri::PhysicalSize<f64>,
-) {
+///
+/// The previous version did its own scale-factor math (physical →
+/// logical via division) which on retina ended up halving an
+/// already-logical position from Tauri, putting the popover off-screen
+/// and looking like the click did nothing. We now convert the tray
+/// rect's Position/Size enum directly to logical units via Tauri's
+/// `to_logical(scale)` and position from there. Single conversion, no
+/// double-divide.
+fn toggle_popover(app: &AppHandle, rect: tauri::Rect) {
     let Some(popover) = app.get_webview_window("popover") else {
+        tracing::warn!("popover window not found");
         return;
     };
     if popover.is_visible().unwrap_or(false) {
         let _ = popover.hide();
         return;
     }
-    // Use logical positioning — Tauri handles the scale-factor conversion.
     let scale = popover.scale_factor().unwrap_or(1.0);
-    let win_size = popover.outer_size().ok();
-    let win_w_logical = win_size.map(|s| s.width as f64 / scale).unwrap_or(340.0);
-    let icon_x = icon_pos.x / scale;
-    let icon_y = icon_pos.y / scale;
-    let icon_w = icon_size.width / scale;
-    let icon_h = icon_size.height / scale;
+    let icon_pos: tauri::LogicalPosition<f64> = rect.position.to_logical(scale);
+    let icon_size: tauri::LogicalSize<f64> = rect.size.to_logical(scale);
+    let (win_w, _win_h) = popover
+        .outer_size()
+        .ok()
+        .map(|s| s.to_logical::<f64>(scale))
+        .map(|l| (l.width, l.height))
+        .unwrap_or((340.0, 480.0));
     // Centre the popover horizontally under the icon. Drop down 6px so
     // it doesn't kiss the menu bar.
-    let x = icon_x + (icon_w / 2.0) - (win_w_logical / 2.0);
-    let y = icon_y + icon_h + 6.0;
+    let x = icon_pos.x + (icon_size.width / 2.0) - (win_w / 2.0);
+    let y = icon_pos.y + icon_size.height + 6.0;
+    tracing::info!(
+        "popover position: logical=({}, {}) win_w={} scale={}",
+        x, y, win_w, scale
+    );
     let _ = popover.set_position(LogicalPosition::new(x, y));
     let _ = popover.show();
     let _ = popover.set_focus();
