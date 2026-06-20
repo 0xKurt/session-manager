@@ -31,6 +31,21 @@ workflows were intentionally removed — keep them gone unless you want
 the cross-platform Tauri build matrix back (expensive on Actions
 minutes; cheaper to just `tauri build` on the dev machine).
 
+## Roadmap — tray popover (planned for v0.2.0)
+
+Today's tray is a Tauri native `Menu` — stock NSMenu look, limited to
+text + glyphs. Claude God (Lcharvol/Claude-God) demonstrates a much
+nicer UX via SwiftUI popover: header card, tab bar, scrollable rows,
+footer with Refresh/Quit. The Tauri equivalent is a small frameless
+transparent webview window positioned at the tray icon's screen
+coordinates. We already have all the React components needed (sidebar
+status lines, session rows, Stop / Restart buttons) — they just need
+to be reused inside a popover route.
+
+When implementing: keep the current `Menu` as a fallback right-click
+path (a11y, missing webview cases); the left-click switches from
+`set_show_menu_on_left_click(true)` to a hand-rolled popover toggle.
+
 ## Layout
 - `crates/core` — supervisor, backend trait, OS layer, paths, events
 - `crates/cli` — `session-manager` CLI

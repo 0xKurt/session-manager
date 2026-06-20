@@ -65,7 +65,12 @@ LATEST_JSON="$OUT_DIR/latest.json"
 echo "→ Packing .app → .tar.gz"
 # Tauri's updater expects the inner entry to be the .app directory; tar
 # from the parent dir so the archive root contains "Session Manager.app".
-( cd "$REPO_ROOT/target/release/bundle/macos" && tar -czf "$TARBALL" "Session Manager.app" )
+# `COPYFILE_DISABLE=1` strips the macOS AppleDouble metadata
+# (`._Session Manager.app/...`) that BSD tar otherwise embeds alongside
+# every file with extended attributes. Without this, tauri-plugin-updater
+# tries to unpack the dot-underscore sidecar as if it were the app bundle
+# and fails with "failed to unpack `._Session Manager.app`".
+( cd "$REPO_ROOT/target/release/bundle/macos" && COPYFILE_DISABLE=1 tar -czf "$TARBALL" "Session Manager.app" )
 
 echo "→ Signing tarball"
 cargo tauri signer sign \

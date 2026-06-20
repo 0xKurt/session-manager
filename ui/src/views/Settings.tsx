@@ -62,7 +62,8 @@ export function Settings() {
           />
           <ToggleRow
             label="Keep machine awake while any session is running"
-            description="Holds `caffeinate -d -i -s -m -u` for as long as at least one session is in a running state — display, idle, system and disk sleep all blocked while sessions are active. macOS limitation: on battery, closing the lid still sleeps the machine regardless (clamshell sleep is hardware-enforced; no userspace tool can override it without sudo + pmset changes). Use AC power if you need to keep sessions running with the lid closed."
+            badge={{ text: "AC only", tone: "warn" }}
+            description="Holds caffeinate(1) display/idle/system/disk sleep assertions for as long as a session is alive. macOS forces sleep when the lid closes on battery (hardware clamshell policy, no userspace flag can override). Plug in if you need sessions to survive a closed lid."
             checked={preferences.keep_awake_master}
             onChange={(v) => void setPrefs({ keep_awake_master: v })}
           />
@@ -145,7 +146,7 @@ export function Settings() {
           </div>
         </section>
 
-        <section className="card padded">
+        <section className="card padded section">
           <h3 className="section-title" style={{ marginBottom: 12 }}>Config file</h3>
           <p className="muted" style={{ marginTop: 0, marginBottom: 12 }}>
             Your fleet is a single human-readable TOML file. Edit it by hand and Session Manager reconciles on change.
@@ -321,18 +322,28 @@ function UpdatesSection() {
 function ToggleRow({
   label,
   description,
+  badge,
   checked,
   onChange,
 }: {
   label: string;
   description?: string;
+  /** Optional inline tag rendered next to the label — used for "AC only"-
+   *  style caveats so the user catches them without reading the long
+   *  description (the keep-awake limitation hides too easily there). */
+  badge?: { text: string; tone?: "warn" | "info" };
   checked: boolean;
   onChange: (v: boolean) => void;
 }) {
   return (
     <div className="toggle-row">
       <div>
-        <div className="toggle-row-label">{label}</div>
+        <div className="toggle-row-label">
+          {label}
+          {badge && (
+            <span className={`row-badge ${badge.tone ?? "warn"}`}>{badge.text}</span>
+          )}
+        </div>
         {description && <div className="toggle-row-desc">{description}</div>}
       </div>
       <label className="toggle">
