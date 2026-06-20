@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { check } from "@tauri-apps/plugin-updater";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { Sidebar } from "./components/Sidebar";
 import { Toasts } from "./components/Toasts";
@@ -13,7 +14,49 @@ import { Popover } from "./views/Popover";
 import { SessionDetail } from "./views/SessionDetail";
 import { Settings } from "./views/Settings";
 
+/**
+ * Top-level router. Picks between the popover and the main app shell
+ * based on the running Tauri window's label. This replaces the earlier
+ * URL-hash routing (`index.html#/popover`) which didn't reliably load
+ * in macOS release builds — the popover window came up blank and the
+ * tray click looked like a no-op.
+ *
+ * Window label is read synchronously on first render via Tauri's
+ * `getCurrentWindow().label`. If we're outside Tauri (vite dev preview
+ * or a stubbed playwright run), the label call throws and we treat it
+ * as "main".
+ */
 export function App() {
+  const [label] = useState<string>(() => {
+    try {
+      return getCurrentWindow().label;
+    } catch {
+      return "main";
+    }
+  });
+  return label === "popover" ? <AppPopover /> : <AppMain />;
+}
+
+function AppPopover() {
+  const bootstrap = useStore((s) => s.bootstrap);
+  const ready = useStore((s) => s.ready);
+  useEffect(() => { void bootstrap(); }, [bootstrap]);
+  if (!ready) {
+    return (
+      <div style={{ display: "grid", placeItems: "center", height: "100vh", color: "var(--text-muted)" }}>
+        Loading…
+      </div>
+    );
+  }
+  return (
+    <>
+      <Popover />
+      <Toasts />
+    </>
+  );
+}
+
+function AppMain() {
   const bootstrap = useStore((s) => s.bootstrap);
   const ready = useStore((s) => s.ready);
   const sessions = useStore((s) => s.sessions);
@@ -23,9 +66,9 @@ export function App() {
 
   useEffect(() => { void bootstrap(); }, [bootstrap]);
 
-  // Silent update check at startup. We deliberately don't download — the
-  // user clicks "Restart to install" inside Settings → About after
-  // navigating there from the toast. Throttled to once-per-hour via
+  // Silent update check at startup. We deliberately don't download here;
+  // the user clicks "Restart to install" inside Settings → About after
+  // navigating there from the toast. Throttled to once per hour via
   // sessionStorage so opening + closing the window doesn't hammer the
   // GitHub API. Failures are swallowed (offline, rate-limited, etc.).
   useEffect(() => {
@@ -34,8 +77,6 @@ export function App() {
     const last = Number(window.sessionStorage.getItem(KEY) ?? "0");
     if (Date.now() - last < 60 * 60 * 1000) return;
     window.sessionStorage.setItem(KEY, String(Date.now()));
-    // A short delay so the first paint isn't competing with a network
-    // round-trip — feels noticeably snappier on cold start.
     const t = window.setTimeout(() => {
       check()
         .then((update) => {
@@ -72,18 +113,6 @@ export function App() {
     );
   }
 
-  // Frameless tray popover — runs in the secondary Tauri window with its
-  // own slim layout, no sidebar / top-bar chrome. Bypasses the rest of
-  // the app shell entirely.
-  if (route.name === "popover") {
-    return (
-      <>
-        <Popover />
-        <Toasts />
-      </>
-    );
-  }
-
   // Onboarding only when there is genuinely nothing — neither a managed
   // session nor an externally-running one. Otherwise we want the user to
   // land on the Dashboard so they can see and Manage what's already there.
@@ -100,9 +129,6 @@ export function App() {
         ) : route.name === "session" ? (
           <SessionDetail id={route.id} />
         ) : route.name === "new" ? (
-          // Key by the query string so navigating Adopt → different Adopt
-          // remounts the form with fresh defaults instead of silently
-          // overwriting the user's in-progress edits.
           <CreateSession key={route.query?.toString() ?? "new"} query={route.query} />
         ) : route.name === "edit" ? (
           <CreateSession editingId={route.id} />
