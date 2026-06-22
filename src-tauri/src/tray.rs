@@ -145,7 +145,31 @@ fn toggle_popover(app: &AppHandle, rect: tauri::Rect) {
     );
     let _ = popover.set_position(LogicalPosition::new(x, y));
     let _ = popover.show();
+    // Crucial on macOS: when the app is in the background (main window
+    // hidden / another app is foreground), Tauri's `set_focus` is not
+    // enough — NSApp only raises windows of the ACTIVE app, so without
+    // explicit activation the popover comes up behind whatever's in
+    // front and the click looks like a no-op. Force activation via
+    // NSApp.activate() before focusing the popover.
+    #[cfg(target_os = "macos")]
+    activate_app_macos();
     let _ = popover.set_focus();
+}
+
+#[cfg(target_os = "macos")]
+fn activate_app_macos() {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+    // tray click already lands on the main thread; MainThreadMarker::new
+    // returns None outside it (defensive).
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let nsapp = NSApplication::sharedApplication(mtm);
+    // macOS 14+ recommends `activate()`. It cooperates with the system
+    // and works as long as the app has at least one visible window
+    // (which we just made true by calling popover.show above).
+    nsapp.activate();
 }
 
 #[derive(Debug, Clone)]
