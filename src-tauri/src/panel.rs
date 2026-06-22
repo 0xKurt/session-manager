@@ -25,8 +25,16 @@
 //! pointers (Tauri's, the NSViewController graph, etc.) remain valid.
 
 use objc2::msg_send;
-use objc2::runtime::AnyObject;
+use objc2::runtime::{AnyClass, AnyObject};
 use tauri::WebviewWindow;
+
+// `object_setClass` is part of the Objective-C runtime, NOT a method on
+// NSObject — sending `setClass:` via msg_send aborts with "unrecognized
+// selector" (see crash in v0.1.8). We declare the C symbol directly
+// rather than reach into `objc2::ffi`, which is marked unstable.
+unsafe extern "C" {
+    fn object_setClass(obj: *mut AnyObject, cls: *const AnyClass) -> *const AnyClass;
+}
 
 // AppKit constants. Hard-coded rather than imported via objc2-app-kit's
 // typed wrappers so this file is stable across objc2-app-kit point
@@ -54,9 +62,8 @@ pub fn make_popover_panel(window: &WebviewWindow) -> Result<(), String> {
         // (1) Re-class as NSPanel. This is the load-bearing step —
         // without it the NonactivatingPanel bit is silently ignored by
         // AppKit (the bit only takes effect on NSPanel instances).
-        let panel_class = objc2::class!(NSPanel);
-        let _: *const AnyObject =
-            msg_send![ns_window, setClass: panel_class];
+        let panel_class: &AnyClass = objc2::class!(NSPanel);
+        object_setClass(ns_window, panel_class);
 
         // (2) Add NonactivatingPanel to the style mask. Preserve the
         // existing mask (borderless, transparent, etc.).
