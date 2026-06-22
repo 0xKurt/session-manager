@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions for the main window",
-  "windows": ["main"],
+  "description": "Permissions for the main + popover windows. The popover needs the same event/IPC surface as main so it can listen to `core-event`, invoke session start/stop, and dismiss itself via `window.hide()`. Without `popover` in this list, the popover webview gets zero capabilities — Start/Stop buttons fire IPC but never see the resulting state change, and 'Open window' can't close the popover.",
+  "windows": ["main", "popover"],
   "permissions": [
     "core:default",
     "core:window:allow-close",

@@ -130,6 +130,14 @@ pub fn open_in_os(path: String) -> std::result::Result<(), String> {
 /// Bring the main window to the foreground. Used by the tray popover
 /// when the user clicks a row that should reveal the main view — the
 /// popover doesn't own that surface, so we hand off here.
+///
+/// On macOS, `set_focus()` calls `[NSWindow makeKeyAndOrderFront:]` which
+/// per Apple docs does NOT activate the application. If the user clicks
+/// from the popover while another app is foreground, the main window
+/// orders front but sits BEHIND that app — the user sees nothing change
+/// and assumes the click did nothing. We explicitly call `NSApp.activate()`
+/// to bring the whole app forward before focusing. (Same trick we already
+/// use for the popover itself in `tray::toggle_popover`.)
 #[tauri::command]
 pub fn focus_main_window(app: tauri::AppHandle) -> std::result::Result<(), String> {
     use tauri::Manager;
@@ -138,6 +146,14 @@ pub fn focus_main_window(app: tauri::AppHandle) -> std::result::Result<(), Strin
     };
     w.show().map_err(|e| e.to_string())?;
     w.unminimize().map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::MainThreadMarker;
+        use objc2_app_kit::NSApplication;
+        if let Some(mtm) = MainThreadMarker::new() {
+            NSApplication::sharedApplication(mtm).activate();
+        }
+    }
     w.set_focus().map_err(|e| e.to_string())?;
     Ok(())
 }
