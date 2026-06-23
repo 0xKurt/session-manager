@@ -53,9 +53,11 @@ pub async fn stop_session(
     state: State<'_, AppState>,
     id: String,
 ) -> std::result::Result<(), String> {
+    // user_initiated=true — Tauri IPC means the user clicked Stop in
+    // the popover or main window.
     state
         .supervisor
-        .stop_session(&id)
+        .stop_session(&id, true)
         .await
         .map_err(|e| e.to_string())
 }
@@ -110,7 +112,7 @@ pub async fn delete_session(
 
 #[tauri::command]
 pub async fn stop_all(state: State<'_, AppState>) -> std::result::Result<(), String> {
-    state.supervisor.stop_all().await.map_err(|e| e.to_string())
+    state.supervisor.stop_all(true).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -281,9 +283,11 @@ pub async fn import_config(
     let parsed: session_manager_core::SessionsFile =
         toml::from_str(&raw).map_err(|e| format!("invalid sessions.toml: {e}"))?;
     // Stop currently-running workers so the import doesn't double-spawn.
+    // user_initiated=false — this is an internal teardown ahead of an
+    // import; we don't want to park the existing fleet.
     state
         .supervisor
-        .stop_all()
+        .stop_all(false)
         .await
         .map_err(|e| e.to_string())?;
     // Replace the fleet wholesale (the UI confirms "replace your fleet").

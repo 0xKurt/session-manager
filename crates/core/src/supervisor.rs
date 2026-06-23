@@ -509,10 +509,20 @@ impl Supervisor {
     /// Stop a session and wait until the worker has acknowledged the kill
     /// (or the deadline elapses). Never `abort()`s — that would orphan the
     /// child (§8.1 "Never orphan a child").
-    pub async fn stop_session(&self, id: &str) -> Result<()> {
+    ///
+    /// `user_initiated` distinguishes a user click on Stop (which should
+    /// park the session so reboot/relaunch doesn't auto-restart it) from
+    /// a supervisor-driven stop like `shutdown()` or `restart_session()`
+    /// (which should leave the session free to come back). Pre-v0.1.13
+    /// every shutdown marked every running session `intentionally_stopped`,
+    /// which meant updates / quits / SIGTERM all silently wiped the "what
+    /// was running" state and nothing came back at boot.
+    pub async fn stop_session(&self, id: &str, user_initiated: bool) -> Result<()> {
         let worker = {
             let mut g = self.inner.shared.lock().await;
-            g.runtime.intentionally_stopped.insert(id.to_string());
+            if user_initiated {
+                g.runtime.intentionally_stopped.insert(id.to_string());
+            }
             let _ = g.runtime.save(&self.inner.state_path);
             g.workers.remove(id)
         };
@@ -528,7 +538,7 @@ impl Supervisor {
                 CoreEvent::StatusChanged {
                     session_id: id.to_string(),
                     status: SessionStatus::Stopped,
-                    reason: Some("user".into()),
+                    reason: Some(if user_initiated { "user" } else { "shutdown" }.into()),
                 },
             );
             return Ok(());
@@ -536,7 +546,7 @@ impl Supervisor {
 
         let (ack_tx, ack_rx) = oneshot::channel();
         let _ = worker.control.send(WorkerCmd::Stop {
-            user_initiated: true,
+            user_initiated,
             ack: ack_tx,
         });
         let _ = tokio::time::timeout(STOP_ACK_DEADLINE, async {
@@ -547,13 +557,13 @@ impl Supervisor {
         Ok(())
     }
 
-    pub async fn stop_all(&self) -> Result<()> {
+    pub async fn stop_all(&self, user_initiated: bool) -> Result<()> {
         let ids: Vec<String> = {
             let g = self.inner.shared.lock().await;
             g.workers.keys().cloned().collect()
         };
         for id in ids {
-            let _ = self.stop_session(&id).await;
+            let _ = self.stop_session(&id, user_initiated).await;
         }
         Ok(())
     }
@@ -561,7 +571,10 @@ impl Supervisor {
     /// Stop all sessions, await their workers, and release the singleton lock.
     /// Call from your binary's shutdown handler (tray "Quit", Ctrl-C).
     pub async fn shutdown(&self) {
-        let _ = self.stop_all().await;
+        // user_initiated=false — running sessions should be free to come
+        // back on next launch. The user didn't click Stop on each one;
+        // they quit / updated / pulled the plug. See stop_session doc.
+        let _ = self.stop_all(false).await;
         // Release keep-awake if any.
         if let Some(t) = self.inner.keep_awake_token.lock().take() {
             t.release();
@@ -594,8 +607,10 @@ impl Supervisor {
 
     pub async fn restart_session(&self, id: &str) -> Result<()> {
         // stop_session awaits child exit (no abort), so this is naturally
-        // serialized and we won't double-spawn.
-        self.stop_session(id).await.ok();
+        // serialized and we won't double-spawn. user_initiated=false —
+        // we're about to clear intentionally_stopped below; setting and
+        // immediately clearing would be wasted work.
+        self.stop_session(id, false).await.ok();
         let mut g = self.inner.shared.lock().await;
         g.runtime.intentionally_stopped.remove(id);
         let _ = g.runtime.save(&self.inner.state_path);
@@ -614,9 +629,11 @@ impl Supervisor {
     /// before giveup completed), `stop_session` first so we don't race the
     /// existing worker's spawn-loop.
     pub async fn reset_and_retry(&self, id: &str) -> Result<()> {
-        // Stop any in-flight worker for this id. stop_session marks the
-        // session as `intentionally_stopped` — we clear that below.
-        self.stop_session(id).await.ok();
+        // Stop any in-flight worker for this id. user_initiated=false —
+        // we want the session to come back, that's the whole point of
+        // reset+retry. (We also defensively clear intentionally_stopped
+        // below in case some prior crash path set it.)
+        self.stop_session(id, false).await.ok();
         let mut g = self.inner.shared.lock().await;
         if let Some(r) = g.runtime.sessions.get_mut(id) {
             r.restart_count = 0;
@@ -669,7 +686,9 @@ impl Supervisor {
     }
 
     pub async fn delete_session(&self, id: &str) -> Result<()> {
-        self.stop_session(id).await.ok();
+        // user_initiated doesn't matter — we wipe the runtime entry +
+        // intentionally_stopped below regardless.
+        self.stop_session(id, false).await.ok();
         let mut g = self.inner.shared.lock().await;
         g.file
             .remove(id)
@@ -1175,9 +1194,11 @@ async fn worker_loop(
             }
         });
 
+        let mut got_stop_cmd = false;
         let mut user_initiated_stop = false;
         let exit_status: Option<std::process::ExitStatus> = tokio::select! {
             cmd = ctl_rx.recv() => {
+                got_stop_cmd = true;
                 match cmd {
                     Some(WorkerCmd::Stop { user_initiated, ack }) => {
                         user_initiated_stop = user_initiated;
@@ -1185,7 +1206,8 @@ async fn worker_loop(
                     }
                     None => {
                         // Control channel dropped — supervisor going away.
-                        user_initiated_stop = true;
+                        // NOT user-initiated, so don't park the session.
+                        user_initiated_stop = false;
                     }
                 }
                 let _ = child.start_kill();
@@ -1204,17 +1226,20 @@ async fn worker_loop(
         stderr_task.abort();
         stdin_pump.abort();
 
-        if user_initiated_stop {
-            // Stop is a "session ended cleanly from the user's POV": clear
-            // the stale jsonl hint so the *next* start with resume=Continue
-            // discovers the latest JSONL fresh, instead of pinning to the
-            // file we just finished writing to.
+        if got_stop_cmd {
+            // A Stop command from the supervisor — clean exit, NOT a crash.
+            // Gating this on got_stop_cmd (rather than user_initiated_stop)
+            // is load-bearing: shutdown / restart_session / reset_and_retry
+            // send user_initiated=false, and without this gate the worker
+            // would fall through to the "non-clean exit" branch below and
+            // enter its crash-retry loop while the supervisor is trying to
+            // tear down — races, double-spawns, the lot.
             clear_jsonl_hint(&inner, &session.id).await;
             mark_status(
                 &inner,
                 &session.id,
                 SessionStatus::Stopped,
-                Some("user".into()),
+                Some(if user_initiated_stop { "user" } else { "shutdown" }.into()),
             )
             .await;
             cleanup_worker_entry(&inner, &session.id).await;

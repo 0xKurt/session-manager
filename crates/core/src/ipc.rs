@@ -196,7 +196,9 @@ async fn dispatch_inner(sup: &Arc<Supervisor>, req: &Request) -> Result<Value> {
         }
         "stop" => {
             let id = arg_str(&req.args, "id")?;
-            sup.stop_session(&id).await?;
+            // user_initiated=true — IPC stop comes from the popover / main UI
+            // / CLI; user explicitly asked to park this session.
+            sup.stop_session(&id, true).await?;
             Ok(Value::Null)
         }
         "restart" => {
@@ -205,7 +207,7 @@ async fn dispatch_inner(sup: &Arc<Supervisor>, req: &Request) -> Result<Value> {
             Ok(Value::Null)
         }
         "stop_all" => {
-            sup.stop_all().await?;
+            sup.stop_all(true).await?;
             Ok(Value::Null)
         }
         "reset_and_retry" => {
