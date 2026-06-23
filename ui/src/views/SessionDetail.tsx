@@ -213,14 +213,17 @@ export function SessionDetail({ id }: { id: string }) {
               </dl>
             </div>
 
-            <details className="aside-card disclosure-inline">
-              <summary>Danger zone</summary>
-              <p className="muted" style={{ marginTop: 8 }}>
+            {/* Delete is intentionally visible (no disclosure widget). The
+                previous "Danger zone" collapsible was reported as undiscoverable:
+                users with broken sessions couldn't find a way to remove them
+                and had to drop to the CLI. confirm() guards against misclick. */}
+            <div className="aside-card">
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>Delete session</div>
+              <p className="muted" style={{ marginTop: 0, marginBottom: 8 }}>
                 Removes the session from config. Stops it first.
               </p>
               <button
                 className="btn danger"
-                style={{ marginTop: 6 }}
                 onClick={() => {
                   if (confirm(`Delete session "${session.name}"?`)) {
                     void remove(session.id).then(() => go("/"));
@@ -229,7 +232,7 @@ export function SessionDetail({ id }: { id: string }) {
               >
                 Delete session
               </button>
-            </details>
+            </div>
           </aside>
         </div>
       </div>

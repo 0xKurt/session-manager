@@ -470,7 +470,13 @@ function blank(defaults?: { agent: string; permission: PermissionMode; remote: b
     path: "",
     remote: defaults?.remote ?? true,
     permission: defaults?.permission ?? "ask",
-    resume: defaults?.resume ?? "continue",
+    // New sessions default to "fresh" — `--continue` against a folder
+    // where claude has never run exits 1 with "No conversation found to
+    // continue", which the supervisor reports as crashed and then
+    // auto_restart loops forever. Power users who want continue-by-default
+    // can still flip it in the form, or set `defaults.resume = "continue"`
+    // and we'll honour it (deliberate opt-in, not silent inheritance).
+    resume: "fresh",
     resume_id: "",
     model: defaults?.model ?? "default",
     keep_awake: defaults?.keep_awake ?? false,
